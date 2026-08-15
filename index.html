@@ -879,7 +879,7 @@
       </div>
       <div class="reward-instructions" id="modalInstructions"></div>
       <button class="reward-btn" id="modalBtn" onclick="closeRewardModal()">我已截图，继续</button>
-<a 小聊添加老师兑奖 &gt;</a>  
+      <a href="javascript:void(0)" class="reward-bottom-link" id="modalBottomLink" aria-disabled="true">小聊添加老师兑奖 &gt;</a>
     </div>
   </div>
 
@@ -905,8 +905,8 @@
           "注册服务器输入：<span class='highlight'>s6868</span>"
         ],
         btnText: "我已截图，继续",
-        bottomLabel: "小聊添加老师兑奖 >",
-         <!-- === bottomUrl: "https://1085.tw/" = -->
+        bottomLabel: "下载任小聊添加老师兑奖",
+        bottomUrl: "https://1085.tw/"
       },
       {
         id: 1,
@@ -919,8 +919,8 @@
           "注册服务器输入：<span class='highlight'>s6868</span>"
         ],
         btnText: "我已截图，继续",
-        bottomLabel: "小聊添加老师兑奖 >",
-       <!-- == bottomUrl: "https://1085.tw/"  = -->
+        bottomLabel: "下载任小聊添加老师兑奖",
+        bottomUrl: "https://1085.tw/"
       },
       {
         id: 2,
@@ -933,8 +933,8 @@
           "注册服务器输入：<span class='highlight'>s6868</span>"
         ],
         btnText: "我已截图，继续",
-         bottomLabel: "小聊添加老师兑奖 >",
-        <!-- == bottomUrl: "https://1085.tw/"  = -->
+        bottomLabel: "下载任小聊添加老师兑奖",
+        bottomUrl: "https://1085.tw/"
       },
       {
         id: 3,
@@ -947,8 +947,8 @@
           "注册服务器输入：<span class='highlight'>s6868</span>"
         ],
         btnText: "我已截图，继续",
-        bottomLabel: "小聊添加老师兑奖 >",
-         <!-- ==  bottomUrl: "https://1085.tw/" = -->
+        bottomLabel: "下载任小聊添加老师兑奖",
+        bottomUrl: "https://1085.tw/"
       },
       {
         id: 4,
@@ -961,8 +961,8 @@
           "注册服务器输入：<span class='highlight'>s6868</span>"
         ],
         btnText: "我已截图，继续",
-        bottomLabel: "小聊添加老师兑奖 >",
-      <!-- ==   bottomUrl: "https://1085.tw/"  == -->
+        bottomLabel: "下载任小聊添加老师兑奖",
+        bottomUrl: "https://1085.tw/"
       },
       {
         id: 5,
@@ -974,9 +974,12 @@
         ],
         btnText: "可进群看计划.了解百万财富计划",
         bottomLabel: "小聊添加老师看计划 >",
-      <!-- ==   bottomUrl: "https://1085.tw/" = -->
+        bottomUrl: "https://1085.tw/"
       }
     ];
+
+    // 兑奖按钮开关：false = 禁止跳转；true = 恢复跳转
+    const REWARD_LINK_ENABLED = false;
 
     let userIP = "127.0.0.1";
     let isSpinning = false;
@@ -1116,10 +1119,20 @@
       instructionsContainer.innerHTML = prizeData.lines.map(line => `<p>${line}</p>`).join('');
       document.getElementById('modalBtn').innerText = prizeData.btnText || "我已截图，继续";
       const bottomLink = document.getElementById('modalBottomLink');
-      bottomLink.innerText = prizeData.bottomLabel || "小聊添加老师兑奖 >";
-      bottomLink.href = prizeData.bottomUrl || "#";  
+      bottomLink.innerText = prizeData.bottomLabel || "下载任小聊添加老师兑奖";
+      bottomLink.removeAttribute("target");
+      if (REWARD_LINK_ENABLED && prizeData.bottomUrl) {
+        bottomLink.href = prizeData.bottomUrl;
+        bottomLink.onclick = null;
+      } else {
+        bottomLink.href = "javascript:void(0)";
+        bottomLink.onclick = function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          return false;
+        };
+      }
       document.getElementById('rewardModal').classList.add('active');
- 
     }
 
     function closeRewardModal() {

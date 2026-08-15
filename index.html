@@ -879,7 +879,7 @@
       </div>
       <div class="reward-instructions" id="modalInstructions"></div>
       <button class="reward-btn" id="modalBtn" onclick="closeRewardModal()">我已截图，继续</button>
-<a href="https://1085.im/" target="_blank" class="reward-bottom-link" id="modalBottomLink">小聊添加老师兑奖 &gt;</a>  
+<a 小聊添加老师兑奖 &gt;</a>  
     </div>
   </div>
 
@@ -1117,9 +1117,9 @@
       document.getElementById('modalBtn').innerText = prizeData.btnText || "我已截图，继续";
       const bottomLink = document.getElementById('modalBottomLink');
       bottomLink.innerText = prizeData.bottomLabel || "小聊添加老师兑奖 >";
-     //  bottomLink.href = prizeData.bottomUrl || "#";  
-
+      bottomLink.href = prizeData.bottomUrl || "#";  
       document.getElementById('rewardModal').classList.add('active');
+ 
     }
 
     function closeRewardModal() {

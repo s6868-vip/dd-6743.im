@@ -981,11 +981,39 @@
     // 兑奖按钮开关：false = 禁止跳转；true = 恢复跳转
     const REWARD_LINK_ENABLED = false;
 
-    let userIP = "127.0.0.1";
+    // 抽奖身份：
+    // 不再依赖公网 IP。IP 获取失败时所有人都会落到 127.0.0.1，
+    // 而且同一出口/NAT/代理下多人还可能共用一个公网 IP。
+    // 改成浏览器首次访问时生成的随机 visitorId，并持久化保存。
+    let visitorId = getOrCreateVisitorId();
     let isSpinning = false;
     let currentSpinCount = 0;
-    let spinHistory = []; 
+    let spinHistory = [];
+    let prizeSequence = [];
     let isTestMode = false;
+
+    function getOrCreateVisitorId() {
+      const KEY = 'redpacket_v3_visitor_id';
+      let id = localStorage.getItem(KEY);
+
+      if (!id) {
+        if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+          id = window.crypto.randomUUID();
+        } else if (window.crypto && window.crypto.getRandomValues) {
+          const bytes = new Uint8Array(16);
+          window.crypto.getRandomValues(bytes);
+          id = Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+        } else {
+          id = Date.now().toString(36) + '_' +
+               Math.random().toString(36).slice(2) + '_' +
+               Math.random().toString(36).slice(2);
+        }
+
+        localStorage.setItem(KEY, id);
+      }
+
+      return id;
+    }
 
     function createDots() {
       const container = document.getElementById('dotsContainer');
@@ -1016,53 +1044,74 @@
       });
     }
 
-    async function fetchIP() {
-      try {
-        const res = await fetch('https://api.ipify.org?format=json');
-        const data = await res.json();
-        userIP = data.ip;
-      } catch (e) {
-        console.warn("未获取到外网 IP，使用默认标识");
-      }
-      loadState();
-    }
+    // 生成不重复的随机抽奖序列。
+    // 每个 visitorId 自己保存一份序列，因此刷新页面不会换奖。
+    // 前 3 次抽奖从 6 个奖项中无重复抽取；测试模式可抽完 6 个。
+    function createPrizeSequence(testMode) {
+      const available = prizes.map((_, index) => index);
 
-    function hashCode(str) {
-      let hash = 0;
-      for (let i = 0; i < str.length; i++) {
-        hash = (hash << 5) - hash + str.charCodeAt(i);
-        hash |= 0;
-      }
-      return Math.abs(hash);
-    }
+      // Fisher-Yates 洗牌，使用 crypto 随机数而不是 IP/hash。
+      for (let i = available.length - 1; i > 0; i--) {
+        let randomIndex;
 
-    function getDeterministicSequence(ip, testMode) {
-      const hash = hashCode(ip);
-      const available = [0, 1, 2, 3, 4, 5];
-      const sequence = [];
-      const totalPicks = testMode ? 6 : 3;
-      for (let i = 0; i < totalPicks; i++) {
-        const pickIndex = (hash + i * 13) % available.length;
-        sequence.push(available[pickIndex]);
-        available.splice(pickIndex, 1);
+        if (window.crypto && window.crypto.getRandomValues) {
+          const random = new Uint32Array(1);
+          window.crypto.getRandomValues(random);
+          randomIndex = random[0] % (i + 1);
+        } else {
+          randomIndex = Math.floor(Math.random() * (i + 1));
+        }
+
+        [available[i], available[randomIndex]] =
+          [available[randomIndex], available[i]];
       }
-      return sequence;
+
+      return testMode ? available : available.slice(0, 3);
     }
 
     function loadState() {
-      const saved = localStorage.getItem('redpacket_v2_state_' + userIP);
+      const key = 'redpacket_v3_state_' + visitorId;
+      const saved = localStorage.getItem(key);
+
       if (saved) {
-        const data = JSON.parse(saved);
-        currentSpinCount = data.currentSpinCount || 0;
-        spinHistory = data.spinHistory || [];
+        try {
+          const data = JSON.parse(saved);
+          currentSpinCount = Number.isInteger(data.currentSpinCount)
+            ? data.currentSpinCount
+            : 0;
+          spinHistory = Array.isArray(data.spinHistory)
+            ? data.spinHistory
+            : [];
+          prizeSequence = Array.isArray(data.prizeSequence)
+            ? data.prizeSequence
+            : [];
+        } catch (e) {
+          console.warn('抽奖状态读取失败，将重新初始化');
+          currentSpinCount = 0;
+          spinHistory = [];
+          prizeSequence = [];
+        }
       }
+
+      // 兼容旧数据：没有序列时重新生成一次。
+      const expectedLength = isTestMode ? prizes.length : 3;
+      if (
+        prizeSequence.length !== expectedLength ||
+        prizeSequence.some(index => !Number.isInteger(index) || !prizes[index])
+      ) {
+        prizeSequence = createPrizeSequence(isTestMode);
+        saveState();
+      }
+
       updateUI();
     }
 
     function saveState() {
-      localStorage.setItem('redpacket_v2_state_' + userIP, JSON.stringify({
+      const key = 'redpacket_v3_state_' + visitorId;
+      localStorage.setItem(key, JSON.stringify({
         currentSpinCount,
-        spinHistory
+        spinHistory,
+        prizeSequence
       }));
     }
 
@@ -1088,8 +1137,21 @@
       document.getElementById('centerBtnText').innerText = "抽奖中";
       updateUI();
 
-      const sequence = getDeterministicSequence(userIP, isTestMode);
-      const targetIndex = sequence[currentSpinCount];
+      // 直接读取当前访客已经生成并保存的随机序列。
+      // 不再根据 IP 计算奖项，因此不同访客不会因为 IP 获取失败而全部拿到同一序列。
+      if (!prizeSequence.length) {
+        prizeSequence = createPrizeSequence(isTestMode);
+        saveState();
+      }
+
+      const targetIndex = prizeSequence[currentSpinCount];
+      if (targetIndex === undefined || !prizes[targetIndex]) {
+        console.error('抽奖序列异常', { visitorId, currentSpinCount, prizeSequence });
+        isSpinning = false;
+        document.getElementById('centerBtnText').innerText = "抽奖";
+        updateUI();
+        return;
+      }
       const segmentAngle = 360 / prizes.length;
       const targetCenter = targetIndex * segmentAngle + (segmentAngle / 2);
       const baseRounds = 1800 * (currentSpinCount + 1);
@@ -1194,7 +1256,7 @@
 
     createDots();
     initWheelLabels();
-    fetchIP();
+    loadState();
     startTimer();
   </script>
 
